@@ -109,6 +109,7 @@ export default function Home() {
   const navigate = useNavigate();
   const [votes, setVotes] = useState<VoteState>({});
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [inviteInfoOpen, setInviteInfoOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
@@ -173,7 +174,7 @@ export default function Home() {
     }
     const isCoarsePointer = Boolean(
       window.matchMedia?.("(pointer: coarse)")?.matches ||
-        window.matchMedia?.("(max-width: 768px)")?.matches,
+      window.matchMedia?.("(max-width: 768px)")?.matches,
     );
     if (!isCoarsePointer) {
       return;
@@ -353,7 +354,7 @@ export default function Home() {
       container.removeEventListener("touchend", onTouchEnd);
       container.removeEventListener("touchcancel", onTouchEnd);
     };
-  }, [keyModalOpen, reviewOpen, isCategorySelectorOpen, isLoading, isError]);
+  }, [keyModalOpen, reviewOpen, inviteInfoOpen, isCategorySelectorOpen, isLoading, isError]);
 
   const items = data?.items ?? [];
   const votingUnlocked = Boolean(voteKeyId);
@@ -512,7 +513,7 @@ export default function Home() {
     event?.preventDefault();
     const trimmedKey = keyInput.trim();
     if (!trimmedKey) {
-      setKeyError("请输入投票密码。");
+      setKeyError("请输入邀请码。");
       return;
     }
     setIsKeySubmitting(true);
@@ -728,13 +729,24 @@ export default function Home() {
           style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 24, zIndex: 1 }}
         >
           <motion.span className="hero-tag" variants={itemVariants}>
-            ChargeDB Awards Voting
+            The ChargeDB Awards 2025
           </motion.span>
           <h1 style={{ display: "inline-block", margin: 0 }}>
-            <AnimatedTitle text="参与项目投票" />
+            <AnimatedTitle text="2025 ChargeDB 年度充电大赏" />
           </h1>
           <motion.p variants={itemVariants}>
-            向下划动浏览项目，每个奖项最多可投 {MAX_VOTES_PER_CATEGORY} 票。
+            本次评选采用邀请制，
+            <span
+              style={{
+                cursor: "pointer",
+                textDecoration: "underline",
+                color: "var(--primary)",
+              }}
+              onClick={() => setInviteInfoOpen(true)}
+            >
+              点击此处
+            </span>
+            如何获取邀请码。对于每个奖项，最多可投两票（可以重复，也可以放弃投票）。
           </motion.p>
         </motion.div>
 
@@ -750,7 +762,7 @@ export default function Home() {
             onClick={startVoting}
             disabled={items.length === 0}
           >
-            {votingUnlocked ? "继续投票" : "开始投票"}
+            {votingUnlocked ? "继续投票" : "开启评选"}
           </button>
           <div className="hero-stats">
             <span>已投 {totalVotes} 票</span>
@@ -937,14 +949,14 @@ export default function Home() {
             <form className="modal-form" onSubmit={handleKeySubmit}>
               <div className="modal-header">
                 <div>
-                  <h2>输入投票密码</h2>
-                  <p>每个密码只能使用一次。</p>
+                  <h2>请输入邀请码</h2>
+                  <p>每个邀请码仅可使用一次。</p>
                 </div>
               </div>
               <div className="modal-body">
                 <div className="input-group">
                   <label className="input-label" htmlFor="vote-key">
-                    投票密码
+                    邀请码
                   </label>
                   <input
                     id="vote-key"
@@ -952,7 +964,7 @@ export default function Home() {
                     className="text-input"
                     value={keyInput}
                     onChange={(event) => setKeyInput(event.target.value)}
-                    placeholder="请输入密码"
+                    placeholder="请输入邀请码"
                   />
                 </div>
                 {keyError ? <p className="error">{keyError}</p> : null}
@@ -1050,6 +1062,47 @@ export default function Home() {
                   </button>
                 </>
               )}
+            </div>
+          </motion.div>
+        </div>
+      ) : null}
+
+      {inviteInfoOpen ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <motion.div
+            className="modal"
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+          >
+            <div className="modal-header">
+              <div>
+                <h2>如何获取邀请码</h2>
+              </div>
+            </div>
+            <div className="modal-body">
+              <p style={{ lineHeight: 1.6, color: "var(--text-secondary)" }}>
+                本活动面向充电爱好玩家、极客与行业从业者，为了防止刷票或其他不正当竞争行为，需在确认身份后获得评选邀请码。
+              </p>
+              <p
+                style={{
+                  marginTop: 12,
+                  lineHeight: 1.6,
+                  color: "var(--text-secondary)",
+                }}
+              >
+                可联系酷安@珊瑚宫心海、小红书@苻铃Furin、哔哩哔哩@是动动小圆帽吗，或发送邮件到
+                FurinCoraline@gmail.com。
+              </p>
+            </div>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => setInviteInfoOpen(false)}
+              >
+                知道了
+              </button>
             </div>
           </motion.div>
         </div>
