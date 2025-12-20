@@ -227,6 +227,8 @@ body,
   border-bottom: 1px dashed var(--border);
   flex-shrink: 0;
   /* Header stays fixed at top of section */
+  position: relative;
+  z-index: 2;
 }
 
 .category-header h2 {
@@ -251,6 +253,91 @@ body,
   font-size: 1rem;
   color: var(--muted-light);
   margin-top: 2px;
+  display: inline-block;
+  transition: transform 0.2s ease;
+}
+
+.category-selector {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-start;
+}
+
+.category-selector-trigger {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.category-selector-trigger:hover h2 {
+  opacity: 0.7;
+}
+
+.category-selector-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 12px;
+}
+
+.category-selector-trigger[aria-expanded="true"] h2::after {
+  transform: rotate(-180deg);
+}
+
+.category-selector-panel {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 0;
+  min-width: min(320px, 80vw);
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.85) 0%,
+    rgba(255, 255, 255, 0.6) 100%
+  );
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  box-shadow: 0 24px 60px rgba(17, 24, 39, 0.18),
+    0 10px 24px rgba(17, 24, 39, 0.08);
+  transform-origin: top left;
+  z-index: 5;
+}
+
+.category-selector-list {
+  display: grid;
+  gap: 10px;
+}
+
+.category-option {
+  border: none;
+  background: transparent;
+  padding: 2px 0;
+  text-align: left;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--primary);
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.category-option:hover {
+  color: var(--accent);
+  transform: translateX(4px);
+}
+
+.category-option:focus-visible {
+  outline: none;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
 }
 
 .category-votes {
@@ -889,6 +976,15 @@ body,
   .category-votes {
     width: 100%;
     text-align: center;
+  }
+
+  .category-selector-panel {
+    min-width: min(260px, 88vw);
+    padding: 14px 16px;
+  }
+
+  .category-option {
+    font-size: 0.95rem;
   }
 
   .modal {

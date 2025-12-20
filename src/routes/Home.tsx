@@ -117,7 +117,10 @@ export default function Home() {
   const [keyInput, setKeyInput] = useState("");
   const [keyError, setKeyError] = useState<string | null>(null);
   const [isKeySubmitting, setIsKeySubmitting] = useState(false);
-  const [categorySelectorOpen, setCategorySelectorOpen] = useState(false);
+  const [categorySelectorAnchor, setCategorySelectorAnchor] = useState<
+    string | null
+  >(null);
+  const isCategorySelectorOpen = categorySelectorAnchor !== null;
   const homeRef = useRef<HTMLDivElement>(null);
   const pagingLock = useRef(false);
   const touchStateRef = useRef<{
@@ -142,6 +145,10 @@ export default function Home() {
     isActive: false,
   });
 
+  function toggleCategorySelector(name: string) {
+    setCategorySelectorAnchor((prev) => (prev === name ? null : name));
+  }
+
   function scrollToCategory(name: string) {
     // Find section by id or data attribute
     const sections = document.querySelectorAll(".category-page");
@@ -151,7 +158,7 @@ export default function Home() {
         break;
       }
     }
-    setCategorySelectorOpen(false);
+    setCategorySelectorAnchor(null);
   }
 
   const { data, isLoading, isError, error } = useQuery({
@@ -221,7 +228,7 @@ export default function Home() {
 
     const onTouchStart = (event: TouchEvent) => {
       resetTouchState();
-      if (keyModalOpen || reviewOpen || categorySelectorOpen) {
+      if (keyModalOpen || reviewOpen || isCategorySelectorOpen) {
         return;
       }
       if (event.touches.length !== 1) {
@@ -346,7 +353,7 @@ export default function Home() {
       container.removeEventListener("touchend", onTouchEnd);
       container.removeEventListener("touchcancel", onTouchEnd);
     };
-  }, [keyModalOpen, reviewOpen, categorySelectorOpen, isLoading, isError]);
+  }, [keyModalOpen, reviewOpen, isCategorySelectorOpen, isLoading, isError]);
 
   const items = data?.items ?? [];
   const votingUnlocked = Boolean(voteKeyId);
@@ -627,6 +634,34 @@ export default function Home() {
     },
   };
 
+  const selectorPanelVariants = {
+    hidden: { opacity: 0, scale: 0.96, y: -6 },
+    visible: {
+      opacity: 1,
+      scale: 1,
+      y: 0,
+      transition: { type: "spring", stiffness: 320, damping: 24 },
+    },
+  };
+
+  const selectorListVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: { staggerChildren: 0.05, delayChildren: 0.08 },
+    },
+  };
+
+  const selectorItemVariants = {
+    hidden: { opacity: 0, y: 8, filter: "blur(4px)" },
+    visible: {
+      opacity: 1,
+      y: 0,
+      filter: "blur(0px)",
+      transition: { duration: 0.35, ease: "easeOut" },
+    },
+  };
+
   const titleCharVariants = {
     hidden: { y: "100%", opacity: 0 },
     visible: {
@@ -746,11 +781,54 @@ export default function Home() {
               viewport={{ once: true }}
               transition={{ duration: 0.6 }}
             >
-              <div onClick={() => setCategorySelectorOpen(true)} style={{ cursor: 'pointer' }}>
-                <h2>{group.name}</h2>
-                <p style={{ margin: "4px 0 0", color: "var(--muted)", fontSize: "0.9rem" }}>
-                  {group.items.length} 个候选项目
-                </p>
+              <div className="category-selector">
+                <button
+                  type="button"
+                  className="category-selector-trigger"
+                  onClick={() => toggleCategorySelector(group.name)}
+                  aria-expanded={
+                    isCategorySelectorOpen && categorySelectorAnchor === group.name
+                  }
+                  aria-haspopup="listbox"
+                >
+                  <h2>{group.name}</h2>
+                  <p
+                    style={{
+                      margin: "4px 0 0",
+                      color: "var(--muted)",
+                      fontSize: "0.9rem",
+                    }}
+                  >
+                    {group.items.length} 个候选项目
+                  </p>
+                </button>
+                {isCategorySelectorOpen && categorySelectorAnchor === group.name ? (
+                  <motion.div
+                    className="category-selector-panel"
+                    variants={selectorPanelVariants}
+                    initial="hidden"
+                    animate="visible"
+                  >
+                    <motion.div
+                      className="category-selector-list"
+                      variants={selectorListVariants}
+                      role="listbox"
+                    >
+                      {groupedItems.map((option) => (
+                        <motion.button
+                          key={option.name}
+                          type="button"
+                          className="category-option"
+                          variants={selectorItemVariants}
+                          role="option"
+                          onClick={() => scrollToCategory(option.name)}
+                        >
+                          {option.name}
+                        </motion.button>
+                      ))}
+                    </motion.div>
+                  </motion.div>
+                ) : null}
               </div>
               <div className="category-votes">
                 已投 {categoryTotal}/{MAX_VOTES_PER_CATEGORY}
@@ -867,44 +945,6 @@ export default function Home() {
           </button>
         </motion.div>
       </section>
-
-      {/* Category Selector Modal */}
-      {categorySelectorOpen ? (
-        <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={() => setCategorySelectorOpen(false)}>
-          <motion.div
-            className="modal"
-            style={{ width: 'min(400px, 90%)', maxHeight: '70vh' }}
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header">
-              <h2>跳转到分类</h2>
-              <button onClick={() => setCategorySelectorOpen(false)} className="icon-button">✕</button>
-            </div>
-            <div className="modal-body" style={{ paddingRight: 0 }}>
-              <div style={{ display: 'grid', gap: '8px' }}>
-                {groupedItems.map(group => (
-                  <button
-                    key={group.name}
-                    className="ghost-button"
-                    style={{
-                      justifyContent: 'flex-start',
-                      textAlign: 'left',
-                      background: 'var(--bg-soft)',
-                      padding: '12px 16px'
-                    }}
-                    onClick={() => scrollToCategory(group.name)}
-                  >
-                    {group.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      ) : null}
 
       {keyModalOpen ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true">
