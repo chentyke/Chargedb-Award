@@ -440,8 +440,8 @@ async function findKeyPageByValue(keyValue, keyProperty) {
   );
 }
 
-async function updateKeyResults(keyId, resultsPayload) {
-  const properties = await fetchKeyDatabaseProperties();
+async function updateKeyResults(keyId, resultsPayload, options = {}) {
+  const properties = options.properties ?? (await fetchKeyDatabaseProperties());
   const keyProperty = resolveKeyProperty(properties);
   const usedProperty = resolveUsedProperty(properties);
   const resultProperty = resolveResultProperty(
@@ -455,6 +455,18 @@ async function updateKeyResults(keyId, resultsPayload) {
     page_id: keyId,
     properties: {
       [resultProperty.name]: update,
+    },
+  });
+}
+
+async function markKeyUsed(keyId, options = {}) {
+  const properties = options.properties ?? (await fetchKeyDatabaseProperties());
+  const usedProperty = resolveUsedProperty(properties);
+  const usedUpdate = buildUsedUpdate(usedProperty.schema);
+  await notion.pages.update({
+    page_id: keyId,
+    properties: {
+      [usedProperty.name]: usedUpdate,
     },
   });
 }
@@ -533,14 +545,6 @@ app.post("/api/vote-key", async (req, res) => {
       return;
     }
 
-    const usedUpdate = buildUsedUpdate(usedProperty.schema);
-    await notion.pages.update({
-      page_id: page.id,
-      properties: {
-        [usedProperty.name]: usedUpdate,
-      },
-    });
-
     res.json({ ok: true, keyId: page.id });
   } catch (error) {
     const message =
@@ -576,7 +580,20 @@ app.post("/api/votes", async (req, res) => {
     }))
     .filter((vote) => vote.id && vote.count > 0);
 
+  let keyProperties = null;
+  let usedProperty = null;
+
   try {
+    if (keyDatabaseId && keyId) {
+      keyProperties = await fetchKeyDatabaseProperties();
+      usedProperty = resolveUsedProperty(keyProperties);
+      const keyPage = await notion.pages.retrieve({ page_id: keyId });
+      if (isUsedPropertyValue(keyPage.properties?.[usedProperty.name])) {
+        res.status(403).json({ error: "Key used", message: "该密码已使用。" });
+        return;
+      }
+    }
+
     let votePropertyName = null;
     const results = [];
 
@@ -613,12 +630,25 @@ app.post("/api/votes", async (req, res) => {
 
     if (keyDatabaseId && keyId) {
       try {
-        await updateKeyResults(keyId, resultsPayload);
+        await updateKeyResults(keyId, resultsPayload, {
+          properties: keyProperties ?? undefined,
+        });
         resultsSaved = true;
       } catch (error) {
         resultsError =
           error instanceof Error ? error.message : "Unknown Notion error.";
         console.error("Key result update error:", resultsError);
+      }
+
+      try {
+        await markKeyUsed(keyId, { properties: keyProperties ?? undefined });
+      } catch (error) {
+        const usedError =
+          error instanceof Error ? error.message : "Unknown Notion error.";
+        console.error("Key used update error:", usedError);
+        resultsError = resultsError
+          ? `${resultsError}; ${usedError}`
+          : usedError;
       }
     }
 
