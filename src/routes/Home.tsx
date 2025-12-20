@@ -728,10 +728,18 @@ export default function Home() {
           animate="visible"
           style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 24, zIndex: 1 }}
         >
-          <motion.span className="hero-tag" variants={itemVariants}>
+          <motion.span
+            variants={itemVariants}
+            style={{
+              fontSize: "1.5rem",
+              fontWeight: 600,
+              color: "var(--muted-light)",
+              fontFamily: "Sora, sans-serif",
+            }}
+          >
             The ChargeDB Awards 2025
           </motion.span>
-          <h1 style={{ display: "inline-block", margin: 0 }}>
+          <h1 style={{ display: "inline-block", margin: 0 }} className="charging-text">
             <AnimatedTitle text="2025 ChargeDB 年度充电大赏" />
           </h1>
           <motion.p variants={itemVariants}>
@@ -969,21 +977,39 @@ export default function Home() {
                 </div>
                 {keyError ? <p className="error">{keyError}</p> : null}
               </div>
-              <div className="modal-actions">
+              <div className="modal-actions" style={{ flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", gap: 12, width: "100%" }}>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={closeKeyModal}
+                    disabled={isKeySubmitting}
+                    style={{ flex: 1 }}
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="submit"
+                    className="primary-button"
+                    disabled={isKeySubmitting}
+                    style={{ flex: 1 }}
+                  >
+                    {isKeySubmitting ? "验证中..." : "开始投票"}
+                  </button>
+                </div>
                 <button
                   type="button"
                   className="ghost-button"
-                  onClick={closeKeyModal}
-                  disabled={isKeySubmitting}
+                  onClick={() => {
+                    setInviteInfoOpen(true);
+                    /* Optional: close key modal? User didn't specify, but usually "jump to" implies switching context. 
+                       However, might want to keep key modal open underneath or close it. 
+                       Let's keep it simple: open invite info. 
+                       If invite info is a modal, it will overlay. */
+                  }}
+                  style={{ fontSize: "0.9rem", color: "var(--accent)" }}
                 >
-                  取消
-                </button>
-                <button
-                  type="submit"
-                  className="primary-button"
-                  disabled={isKeySubmitting}
-                >
-                  {isKeySubmitting ? "验证中..." : "开始投票"}
+                  如何获取邀请码？
                 </button>
               </div>
             </form>
