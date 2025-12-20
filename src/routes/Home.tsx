@@ -932,24 +932,17 @@ export default function Home() {
                           <h3>{item.title}</h3>
                         </div>
                         <div className="entry-details">
-                          <div className="detail-row">
-                            <span className="detail-label">型号</span>
-                            <span className="detail-value">
-                              {item.model || "待补充"}
+                          <div className="entry-tags">
+                            <span className="entry-tag">
+                              {item.model ? `型号：${item.model}` : "型号待补充"}
+                            </span>
+                            <span className="entry-tag">
+                              {item.specs ? `规格：${item.specs}` : "规格待补充"}
                             </span>
                           </div>
-                          <div className="detail-row">
-                            <span className="detail-label">规格</span>
-                            <span className="detail-value">
-                              {item.specs || "待补充"}
-                            </span>
-                          </div>
-                          <div className="detail-row">
-                            <span className="detail-label">推荐理由</span>
-                            <span className="detail-value">
-                              {item.reason || "待补充"}
-                            </span>
-                          </div>
+                          <p className="entry-reason">
+                            {item.reason || "暂无推荐理由"}
+                          </p>
                         </div>
                         <div className="card-footer">
                           <div
