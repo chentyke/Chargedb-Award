@@ -14,6 +14,28 @@ import type { NotionItem, NotionPropertyValue } from "../types/notion";
 
 const MAX_VOTES_PER_CATEGORY = 2;
 
+const CATEGORY_ORDER = [
+  "年度最佳充电产品",
+  "最佳高性能移动电源",
+  "最佳便携式移动电源",
+  "最佳高性能充电器",
+  "最佳便携式充电器",
+  "最佳桌面充电站",
+  "最佳充电与数据传输线缆",
+  "最佳无线充电配件",
+  "最佳快充体验手机",
+  "最佳快充测试仪",
+  "最佳能效表现奖",
+  "最佳外观设计奖",
+  "最佳性价比奖",
+  "最佳交互体验奖",
+  "年度技术创新",
+  "年度创意设计",
+] as const;
+const CATEGORY_ORDER_LOOKUP: Map<string, number> = new Map(
+  CATEGORY_ORDER.map((name, index) => [name, index]),
+);
+
 const CATEGORY_MATCHERS = [
   "参与项目",
   "项目分类",
@@ -422,6 +444,8 @@ export default function Home() {
       numeric: true,
       sensitivity: "base",
     });
+    const getCategoryRank = (name: string) =>
+      CATEGORY_ORDER_LOOKUP.get(name.trim()) ?? Number.MAX_SAFE_INTEGER;
     return Array.from(groups.entries())
       .map(([name, group]) => ({
         name,
@@ -429,7 +453,14 @@ export default function Home() {
           (a, b) => a.order - b.order || collator.compare(a.title, b.title),
         ),
       }))
-      .sort((a, b) => collator.compare(a.name, b.name));
+      .sort((a, b) => {
+        const rankA = getCategoryRank(a.name);
+        const rankB = getCategoryRank(b.name);
+        if (rankA !== rankB) {
+          return rankA - rankB;
+        }
+        return collator.compare(a.name, b.name);
+      });
   }, [viewItems]);
 
   function scrollToFirstCategory() {
