@@ -65,6 +65,14 @@ body,
 }
 
 @media (max-width: 768px) {
+  html,
+  body,
+  #root,
+  .app {
+    height: 100svh;
+    min-height: 100svh;
+  }
+
   .home {
     height: 100svh;
     /* Restore scroll snap */
@@ -325,6 +333,7 @@ body,
   position: relative;
   display: inline-flex;
   align-items: flex-start;
+  min-width: 0;
 }
 
 .category-selector-trigger {
@@ -338,6 +347,8 @@ body,
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .category-selector-trigger:hover h2 {
@@ -489,6 +500,7 @@ body,
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-width: 0;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   /* Removed rising animation to prevent flicker during scroll */
 }
@@ -1141,20 +1153,68 @@ body,
   .category-header {
     flex-direction: row;
     align-items: flex-start;
+    flex-wrap: wrap;
+    row-gap: 8px;
   }
 
   .category-selector {
     min-width: 0;
   }
 
+  .category-selector-trigger h2,
+  .category-selector-trigger p {
+    overflow-wrap: anywhere;
+  }
+
   .category-votes {
     width: auto;
     text-align: right;
+    flex-shrink: 0;
   }
 
   .entries-container {
     margin-top: -8px;
     padding-top: 4px;
+  }
+
+  .entries-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .entry-body {
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .entry-title h3 {
+    font-size: 1rem;
+  }
+
+  .entry-tag {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+  }
+
+  .entry-reason {
+    font-size: 0.85rem;
+  }
+
+  .vote-control {
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .vote-step {
+    width: 28px;
+    height: 28px;
+    font-size: 0.95rem;
+  }
+
+  .vote-count {
+    min-width: 52px;
+    padding: 0 4px;
+    font-size: 0.8rem;
   }
 
   .category-selector-panel {
