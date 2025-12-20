@@ -1177,6 +1177,10 @@ body,
     padding-top: 4px;
   }
 
+  .entry-tags {
+    align-items: flex-start;
+  }
+
   .entries-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
@@ -1194,6 +1198,13 @@ body,
   .entry-tag {
     font-size: 0.65rem;
     padding: 2px 6px;
+    white-space: normal;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-height: 1.2;
   }
 
   .entry-reason {
