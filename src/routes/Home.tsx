@@ -653,6 +653,7 @@ export default function Home() {
       sum + Object.values(categoryVotes).reduce((acc, count) => acc + count, 0),
     0,
   );
+  const totalVoteCap = groupedItems.length * MAX_VOTES_PER_CATEGORY;
 
   // Animation variants
   const heroContainerVariants: Variants = {
@@ -906,6 +907,22 @@ export default function Home() {
               </div>
               <div className="category-votes">
                 已投 {categoryTotal}/{MAX_VOTES_PER_CATEGORY}
+              </div>
+              <div className="category-actions" role="group" aria-label="投票概览">
+                <button type="button" className="category-stat" disabled>
+                  当前奖项已投{categoryTotal}/{MAX_VOTES_PER_CATEGORY}
+                </button>
+                <button type="button" className="category-stat" disabled>
+                  总计已投{totalVotes}/{totalVoteCap}
+                </button>
+                <button
+                  type="button"
+                  className="primary-button compact"
+                  onClick={openReview}
+                  disabled={!votingUnlocked}
+                >
+                  立即提交
+                </button>
               </div>
             </motion.header>
 
@@ -1164,7 +1181,7 @@ export default function Home() {
                   color: "var(--text-secondary)",
                 }}
               >
-                可联系酷安@珊瑚宫心海、小红书@苻铃Furin、哔哩哔哩@是动动小圆帽吗，或发送邮件到
+                可联系酷安@珊瑚宫心海、小红书@苻铃Furin、哔哩哔哩@是咚咚小圆帽吗，或发送邮件到
                 FurinCoraline@gmail.com。
               </p>
             </div>
