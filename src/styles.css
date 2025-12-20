@@ -19,6 +19,8 @@
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 *,
@@ -31,34 +33,56 @@ html,
 body,
 #root,
 .app {
-  height: 100vh;
+  height: 100%;
   margin: 0;
   padding: 0;
-  overflow: hidden;
 }
 
 .home {
-  height: 100vh;
-  overflow-y: scroll;
-  scroll-snap-type: y mandatory;
-  scroll-behavior: smooth;
+  min-height: 100%;
+  overflow-y: auto;
   display: block;
-  scrollbar-width: none;
-}
-
-.home::-webkit-scrollbar {
-  display: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Sections Common */
 .page-hero,
 .category-page,
 .submit-page {
-  height: 100vh;
+  min-height: 100svh;
   width: 100%;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
   box-sizing: border-box;
+}
+
+@media (min-width: 769px) {
+  html,
+  body,
+  #root,
+  .app {
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .home {
+    height: 100vh;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+  }
+
+  .home::-webkit-scrollbar {
+    display: none;
+  }
+
+  .page-hero,
+  .category-page,
+  .submit-page {
+    height: 100vh;
+    min-height: auto;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
 }
 
 /* Hero Section */
@@ -173,14 +197,22 @@ body,
 
 @media (max-width: 768px) {
   .category-page {
-    padding: 16px;
+    padding: calc(16px + var(--safe-top)) 16px
+      calc(16px + var(--safe-bottom));
     gap: 16px;
+    overflow: visible;
   }
 
   .page-hero {
-    padding: 24px;
+    padding: calc(24px + var(--safe-top)) 24px
+      calc(24px + var(--safe-bottom));
     align-items: flex-start;
     text-align: left;
+  }
+
+  .submit-page {
+    padding: calc(24px + var(--safe-top)) 24px
+      calc(24px + var(--safe-bottom));
   }
 
   .page-hero h1 {
@@ -235,14 +267,20 @@ body,
 
 .entries-container {
   flex: 1;
-  overflow-y: auto;
+  overflow: visible;
   padding-bottom: 32px;
   /* Space for scrolling */
-  scrollbar-width: none;
 }
 
 .entries-container::-webkit-scrollbar {
   display: none;
+}
+
+@media (min-width: 769px) {
+  .entries-container {
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
 }
 
 .entries-grid {
