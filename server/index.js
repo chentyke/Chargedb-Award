@@ -287,11 +287,39 @@ function buildUsedUpdate(propertySchema) {
 }
 
 function buildResultUpdate(propertySchema, content) {
+  const MAX_RESULT_CHUNK_LENGTH = 1900;
+  const MAX_RESULT_CHUNKS = 100;
+  const safeContent = content ?? "";
+  const chunks = [];
+
+  for (
+    let index = 0;
+    index < safeContent.length && chunks.length < MAX_RESULT_CHUNKS;
+    index += MAX_RESULT_CHUNK_LENGTH
+  ) {
+    chunks.push(safeContent.slice(index, index + MAX_RESULT_CHUNK_LENGTH));
+  }
+
+  if (
+    safeContent.length > MAX_RESULT_CHUNK_LENGTH * MAX_RESULT_CHUNKS &&
+    chunks.length > 0
+  ) {
+    const suffix = "...";
+    const lastIndex = chunks.length - 1;
+    const trimmed = chunks[lastIndex].slice(
+      0,
+      Math.max(0, MAX_RESULT_CHUNK_LENGTH - suffix.length),
+    );
+    chunks[lastIndex] = `${trimmed}${suffix}`;
+  }
+
+  const richText = chunks.map((chunk) => ({ text: { content: chunk } }));
+
   switch (propertySchema.type) {
     case "rich_text":
-      return { rich_text: [{ text: { content } }] };
+      return { rich_text: richText };
     case "title":
-      return { title: [{ text: { content } }] };
+      return { title: richText };
     default:
       throw new Error(
         `Result property must be rich_text or title (got ${propertySchema.type}).`,
