@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
@@ -48,6 +48,12 @@ type ItemView = {
 };
 
 type VoteState = Record<string, Record<string, number>>;
+type PageDirection = "next" | "prev";
+
+const SWIPE_EDGE_THRESHOLD = 36;
+const EDGE_TOLERANCE = 2;
+const OUTER_SCROLL_TOLERANCE = 6;
+const PAGE_SCROLL_COOLDOWN_MS = 650;
 
 function normalizeText(value: NotionPropertyValue | undefined) {
   if (!value) {
@@ -112,6 +118,29 @@ export default function Home() {
   const [keyError, setKeyError] = useState<string | null>(null);
   const [isKeySubmitting, setIsKeySubmitting] = useState(false);
   const [categorySelectorOpen, setCategorySelectorOpen] = useState(false);
+  const homeRef = useRef<HTMLDivElement>(null);
+  const pagingLock = useRef(false);
+  const touchStateRef = useRef<{
+    startX: number;
+    startY: number;
+    lastX: number;
+    lastY: number;
+    containerStartScrollTop: number;
+    activeScrollable: HTMLElement | null;
+    edgeDirection: PageDirection | null;
+    edgeStartY: number | null;
+    isActive: boolean;
+  }>({
+    startX: 0,
+    startY: 0,
+    lastX: 0,
+    lastY: 0,
+    containerStartScrollTop: 0,
+    activeScrollable: null,
+    edgeDirection: null,
+    edgeStartY: null,
+    isActive: false,
+  });
 
   function scrollToCategory(name: string) {
     // Find section by id or data attribute
@@ -129,6 +158,195 @@ export default function Home() {
     queryKey: ["notion-items"],
     queryFn: fetchNotionItems,
   });
+
+  useEffect(() => {
+    const container = homeRef.current;
+    if (!container) {
+      return;
+    }
+    const isCoarsePointer = Boolean(
+      window.matchMedia?.("(pointer: coarse)")?.matches ||
+        window.matchMedia?.("(max-width: 768px)")?.matches,
+    );
+    if (!isCoarsePointer) {
+      return;
+    }
+
+    const resetTouchState = () => {
+      const state = touchStateRef.current;
+      state.isActive = false;
+      state.activeScrollable = null;
+      state.edgeDirection = null;
+      state.edgeStartY = null;
+      state.containerStartScrollTop = 0;
+    };
+
+    const getScrollableTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) {
+        return null;
+      }
+      return target.closest(".entries-container") as HTMLElement | null;
+    };
+
+    const isModalTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) {
+        return false;
+      }
+      return Boolean(target.closest(".modal, .modal-backdrop"));
+    };
+
+    const getSections = () =>
+      Array.from(
+        container.querySelectorAll<HTMLElement>(
+          ".page-hero, .category-page, .submit-page",
+        ),
+      );
+
+    const getActiveSectionIndex = (sections: HTMLElement[]) => {
+      const midPoint = container.scrollTop + container.clientHeight / 2;
+      for (let index = 0; index < sections.length; index += 1) {
+        const section = sections[index];
+        const start = section.offsetTop;
+        const end = start + section.offsetHeight;
+        if (midPoint >= start && midPoint < end) {
+          return index;
+        }
+      }
+      return 0;
+    };
+
+    const scrollToSection = (section: HTMLElement) => {
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+
+    const onTouchStart = (event: TouchEvent) => {
+      resetTouchState();
+      if (keyModalOpen || reviewOpen || categorySelectorOpen) {
+        return;
+      }
+      if (event.touches.length !== 1) {
+        return;
+      }
+      if (isModalTarget(event.target)) {
+        return;
+      }
+      const touch = event.touches[0];
+      const state = touchStateRef.current;
+      state.startX = touch.clientX;
+      state.startY = touch.clientY;
+      state.lastX = touch.clientX;
+      state.lastY = touch.clientY;
+      state.containerStartScrollTop = container.scrollTop;
+      state.activeScrollable = getScrollableTarget(event.target);
+      state.isActive = Boolean(state.activeScrollable);
+    };
+
+    const onTouchMove = (event: TouchEvent) => {
+      const state = touchStateRef.current;
+      if (!state.isActive || !state.activeScrollable) {
+        return;
+      }
+      if (event.touches.length !== 1) {
+        return;
+      }
+      const touch = event.touches[0];
+      const deltaX = touch.clientX - state.lastX;
+      const deltaY = touch.clientY - state.lastY;
+      state.lastX = touch.clientX;
+      state.lastY = touch.clientY;
+
+      if (Math.abs(deltaY) <= Math.abs(deltaX)) {
+        state.edgeDirection = null;
+        state.edgeStartY = null;
+        return;
+      }
+
+      const direction: PageDirection = deltaY < 0 ? "next" : "prev";
+      const scrollable = state.activeScrollable;
+      const atTop = scrollable.scrollTop <= EDGE_TOLERANCE;
+      const atBottom =
+        scrollable.scrollTop + scrollable.clientHeight >=
+        scrollable.scrollHeight - EDGE_TOLERANCE;
+      const isAtEdge = direction === "next" ? atBottom : atTop;
+
+      if (!isAtEdge) {
+        state.edgeDirection = null;
+        state.edgeStartY = null;
+        return;
+      }
+
+      if (state.edgeDirection !== direction) {
+        state.edgeDirection = direction;
+        state.edgeStartY = touch.clientY;
+      }
+    };
+
+    const onTouchEnd = (event: TouchEvent) => {
+      const state = touchStateRef.current;
+      if (!state.isActive) {
+        return;
+      }
+      if (event.changedTouches.length === 1) {
+        const touch = event.changedTouches[0];
+        state.lastX = touch.clientX;
+        state.lastY = touch.clientY;
+      }
+
+      const edgeDirection = state.edgeDirection;
+      const edgeStartY = state.edgeStartY;
+      const outerScrollDelta = Math.abs(
+        container.scrollTop - state.containerStartScrollTop,
+      );
+      resetTouchState();
+
+      if (!edgeDirection || edgeStartY == null) {
+        return;
+      }
+      if (outerScrollDelta > OUTER_SCROLL_TOLERANCE) {
+        return;
+      }
+      const edgeDelta = state.lastY - edgeStartY;
+      const isSwipeEnough =
+        edgeDirection === "next"
+          ? edgeDelta < -SWIPE_EDGE_THRESHOLD
+          : edgeDelta > SWIPE_EDGE_THRESHOLD;
+      if (!isSwipeEnough) {
+        return;
+      }
+      if (pagingLock.current) {
+        return;
+      }
+      pagingLock.current = true;
+      window.setTimeout(() => {
+        pagingLock.current = false;
+      }, PAGE_SCROLL_COOLDOWN_MS);
+
+      const sections = getSections();
+      if (sections.length === 0) {
+        return;
+      }
+      const currentIndex = getActiveSectionIndex(sections);
+      const nextIndex =
+        edgeDirection === "next"
+          ? Math.min(sections.length - 1, currentIndex + 1)
+          : Math.max(0, currentIndex - 1);
+      if (nextIndex !== currentIndex) {
+        scrollToSection(sections[nextIndex]);
+      }
+    };
+
+    container.addEventListener("touchstart", onTouchStart, { passive: true });
+    container.addEventListener("touchmove", onTouchMove, { passive: true });
+    container.addEventListener("touchend", onTouchEnd, { passive: true });
+    container.addEventListener("touchcancel", onTouchEnd, { passive: true });
+
+    return () => {
+      container.removeEventListener("touchstart", onTouchStart);
+      container.removeEventListener("touchmove", onTouchMove);
+      container.removeEventListener("touchend", onTouchEnd);
+      container.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, [keyModalOpen, reviewOpen, categorySelectorOpen, isLoading, isError]);
 
   const items = data?.items ?? [];
   const votingUnlocked = Boolean(voteKeyId);
@@ -446,7 +664,11 @@ export default function Home() {
 
   if (isLoading) {
     return (
-      <div className="home" style={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
+      <div
+        className="home"
+        ref={homeRef}
+        style={{ display: "flex", justifyContent: "center", alignItems: "center" }}
+      >
         <div className="state">
           <strong>正在读取投票数据</strong>
           <p>Notion 数据库正在响应，请稍候。</p>
@@ -457,7 +679,11 @@ export default function Home() {
 
   if (isError) {
     return (
-      <div className="home" style={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
+      <div
+        className="home"
+        ref={homeRef}
+        style={{ display: "flex", justifyContent: "center", alignItems: "center" }}
+      >
         <div className="state">
           <strong>无法加载投票项目</strong>
           <p>{error instanceof Error ? error.message : "未知错误。"}</p>
@@ -467,7 +693,7 @@ export default function Home() {
   }
 
   return (
-    <div className="home">
+    <div className="home" ref={homeRef}>
       {/* Hero Page */}
       <section className="page-hero">
         <motion.div
