@@ -509,6 +509,14 @@ export default function Home() {
     }
   }
 
+  function openInviteInfoFromKeyModal() {
+    if (isKeySubmitting) {
+      return;
+    }
+    setInviteInfoOpen(true);
+    setKeyModalOpen(false);
+  }
+
   async function handleKeySubmit(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     const trimmedKey = keyInput.trim();
@@ -654,36 +662,47 @@ export default function Home() {
   };
 
   const titleCharVariants: Variants = {
-    hidden: { y: "100%", opacity: 0 },
-    visible: {
+    hidden: { y: "100%", opacity: 0, color: "var(--primary)" },
+    visible: (index: number) => ({
       y: 0,
       opacity: 1,
+      color: ["var(--primary)", "var(--charge-green)"],
       transition: {
-        duration: 0.8,
-        ease: "backOut" as const,
+        y: { duration: 0.8, ease: "backOut" as const },
+        opacity: { duration: 0.6 },
+        color: { duration: 0.9, delay: index * 0.04, ease: "easeInOut" },
       },
-    },
+    }),
   };
 
-  const AnimatedTitle = ({ text }: { text: string }) => {
+  const AnimatedTitle = ({ lines }: { lines: string[] }) => {
     return (
-      <span style={{ display: "inline-block", overflow: "hidden" }}>
-        <motion.span
-          style={{ display: "inline-block" }}
-          initial="hidden"
-          animate="visible"
-          transition={{ staggerChildren: 0.08 }}
-        >
-          {text.split("").map((char, index) => (
+      <span className="hero-title">
+        {lines.map((line, lineIndex) => (
+          <span className="hero-title-line" key={`${line}-${lineIndex}`}>
             <motion.span
-              key={`${char}-${index}`}
-              variants={titleCharVariants}
-              style={{ display: "inline-block", whiteSpace: "pre" }}
+              className="hero-title-line-inner"
+              initial="hidden"
+              animate="visible"
+              transition={{
+                staggerChildren: 0.06,
+                delayChildren: lineIndex * 0.2,
+              }}
             >
-              {char}
+              {line.split("").map((char, index) => (
+                <motion.span
+                  key={`${lineIndex}-${char}-${index}`}
+                  variants={titleCharVariants}
+                  custom={index}
+                  className="hero-title-char"
+                  style={{ display: "inline-block", whiteSpace: "pre" }}
+                >
+                  {char}
+                </motion.span>
+              ))}
             </motion.span>
-          ))}
-        </motion.span>
+          </span>
+        ))}
       </span>
     );
   };
@@ -728,19 +747,11 @@ export default function Home() {
           animate="visible"
           style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 24, zIndex: 1 }}
         >
-          <motion.span
-            variants={itemVariants}
-            style={{
-              fontSize: "1.5rem",
-              fontWeight: 600,
-              color: "var(--muted-light)",
-              fontFamily: "Sora, sans-serif",
-            }}
-          >
+          <motion.span className="hero-tag" variants={itemVariants}>
             The ChargeDB Awards 2025
           </motion.span>
-          <h1 style={{ display: "inline-block", margin: 0 }} className="charging-text">
-            <AnimatedTitle text="2025 ChargeDB 年度充电大赏" />
+          <h1 style={{ display: "inline-block", margin: 0 }}>
+            <AnimatedTitle lines={["2025 ChargeDB", "年度充电大赏"]} />
           </h1>
           <motion.p variants={itemVariants}>
             本次评选采用邀请制，
@@ -960,6 +971,14 @@ export default function Home() {
                   <h2>请输入邀请码</h2>
                   <p>每个邀请码仅可使用一次。</p>
                 </div>
+                <button
+                  type="button"
+                  className="modal-link"
+                  onClick={openInviteInfoFromKeyModal}
+                  disabled={isKeySubmitting}
+                >
+                  获取邀请码
+                </button>
               </div>
               <div className="modal-body">
                 <div className="input-group">
@@ -977,39 +996,21 @@ export default function Home() {
                 </div>
                 {keyError ? <p className="error">{keyError}</p> : null}
               </div>
-              <div className="modal-actions" style={{ flexDirection: "column", gap: 12 }}>
-                <div style={{ display: "flex", gap: 12, width: "100%" }}>
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={closeKeyModal}
-                    disabled={isKeySubmitting}
-                    style={{ flex: 1 }}
-                  >
-                    取消
-                  </button>
-                  <button
-                    type="submit"
-                    className="primary-button"
-                    disabled={isKeySubmitting}
-                    style={{ flex: 1 }}
-                  >
-                    {isKeySubmitting ? "验证中..." : "开始投票"}
-                  </button>
-                </div>
+              <div className="modal-actions">
                 <button
                   type="button"
                   className="ghost-button"
-                  onClick={() => {
-                    setInviteInfoOpen(true);
-                    /* Optional: close key modal? User didn't specify, but usually "jump to" implies switching context. 
-                       However, might want to keep key modal open underneath or close it. 
-                       Let's keep it simple: open invite info. 
-                       If invite info is a modal, it will overlay. */
-                  }}
-                  style={{ fontSize: "0.9rem", color: "var(--accent)" }}
+                  onClick={closeKeyModal}
+                  disabled={isKeySubmitting}
                 >
-                  如何获取邀请码？
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={isKeySubmitting}
+                >
+                  {isKeySubmitting ? "验证中..." : "开始投票"}
                 </button>
               </div>
             </form>
