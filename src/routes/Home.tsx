@@ -706,7 +706,7 @@ export default function Home() {
       >
         <div className="state">
           <strong>正在读取投票数据</strong>
-          <p>Notion 数据库正在响应，请稍候。</p>
+          <p>数据库正在响应，请稍候。</p>
         </div>
       </div>
     );
