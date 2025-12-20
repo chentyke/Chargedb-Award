@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { fetchNotionItems, submitVotes, verifyVoteKey } from "../api/notion";
 import type { NotionItem, NotionPropertyValue } from "../types/notion";
 
@@ -608,7 +608,7 @@ export default function Home() {
   );
 
   // Animation variants
-  const heroContainerVariants = {
+  const heroContainerVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
@@ -619,22 +619,12 @@ export default function Home() {
     },
   };
 
-  const itemVariants = {
+  const itemVariants: Variants = {
     hidden: { opacity: 0, y: 20 },
     visible: { opacity: 1, y: 0, transition: { duration: 0.6 } },
   };
 
-  const staggerContainerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.05,
-      },
-    },
-  };
-
-  const selectorPanelVariants = {
+  const selectorPanelVariants: Variants = {
     hidden: { opacity: 0, scale: 0.96, y: -6 },
     visible: {
       opacity: 1,
@@ -644,7 +634,7 @@ export default function Home() {
     },
   };
 
-  const selectorListVariants = {
+  const selectorListVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
@@ -652,7 +642,7 @@ export default function Home() {
     },
   };
 
-  const selectorItemVariants = {
+  const selectorItemVariants: Variants = {
     hidden: { opacity: 0, y: 8, filter: "blur(4px)" },
     visible: {
       opacity: 1,
@@ -662,7 +652,7 @@ export default function Home() {
     },
   };
 
-  const titleCharVariants = {
+  const titleCharVariants: Variants = {
     hidden: { y: "100%", opacity: 0 },
     visible: {
       y: 0,
@@ -836,13 +826,7 @@ export default function Home() {
             </motion.header>
 
             <div className="entries-container">
-              <motion.div
-                className="entries-grid"
-                variants={staggerContainerVariants}
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true, margin: "-10%" }}
-              >
+              <div className="entries-grid">
                 {group.items.map((item) => {
                   const currentVotes = getCategoryVotes(group.name)[item.id] ?? 0;
                   const categoryAtLimit = categoryTotal >= MAX_VOTES_PER_CATEGORY;
@@ -850,11 +834,7 @@ export default function Home() {
                     !categoryAtLimit && currentVotes < MAX_VOTES_PER_CATEGORY;
 
                   return (
-                    <motion.article
-                      className="entry-card"
-                      key={item.id}
-                      variants={itemVariants}
-                    >
+                    <article className="entry-card" key={item.id}>
                       <div className="media">
                         {item.image ? (
                           <img src={item.image} alt={item.title} />
@@ -914,10 +894,10 @@ export default function Home() {
                           </div>
                         </div>
                       </div>
-                    </motion.article>
+                    </article>
                   );
                 })}
-              </motion.div>
+              </div>
             </div>
           </section>
         );
