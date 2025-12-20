@@ -1,4 +1,5 @@
 import {
+  memo,
   useEffect,
   useMemo,
   useRef,
@@ -83,6 +84,72 @@ const SWIPE_EDGE_THRESHOLD = 36;
 const EDGE_TOLERANCE = 2;
 const OUTER_SCROLL_TOLERANCE = 6;
 const PAGE_SCROLL_COOLDOWN_MS = 650;
+const HERO_TITLE_LINES = ["2025 ChargeDB", "年度充电大赏"];
+
+const titleCharVariants: Variants = {
+  hidden: { y: "100%", opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: {
+      duration: 0.8,
+      ease: "backOut" as const,
+    },
+  },
+};
+
+const AnimatedTitle = memo(function AnimatedTitle({
+  lines,
+}: {
+  lines: string[];
+}) {
+  const maxLineDuration = Math.max(
+    ...lines.map(
+      (line, index) =>
+        index * 0.2 + Math.max(0, line.length - 1) * 0.06 + 0.8,
+    ),
+  );
+  const sweepStyle = {
+    "--sweep-delay": `${maxLineDuration + 0.15}s`,
+  } as CSSProperties;
+  return (
+    <span className="hero-title" style={sweepStyle}>
+      <span className="hero-title-layer hero-title-base">
+        {lines.map((line, lineIndex) => (
+          <span className="hero-title-line" key={`${line}-${lineIndex}`}>
+            <motion.span
+              className="hero-title-line-inner"
+              initial="hidden"
+              animate="visible"
+              transition={{
+                staggerChildren: 0.06,
+                delayChildren: lineIndex * 0.2,
+              }}
+            >
+              {line.split("").map((char, index) => (
+                <motion.span
+                  key={`${lineIndex}-${char}-${index}`}
+                  variants={titleCharVariants}
+                  className="hero-title-char"
+                  style={{ display: "inline-block", whiteSpace: "pre" }}
+                >
+                  {char}
+                </motion.span>
+              ))}
+            </motion.span>
+          </span>
+        ))}
+      </span>
+      <span className="hero-title-layer hero-title-sweep" aria-hidden="true">
+        {lines.map((line, lineIndex) => (
+          <span className="hero-title-line" key={`sweep-${line}-${lineIndex}`}>
+            <span className="hero-title-line-inner">{line}</span>
+          </span>
+        ))}
+      </span>
+    </span>
+  );
+});
 
 function normalizeText(value: NotionPropertyValue | undefined) {
   if (!value) {
@@ -700,67 +767,6 @@ export default function Home() {
     },
   };
 
-  const titleCharVariants: Variants = {
-    hidden: { y: "100%", opacity: 0 },
-    visible: {
-      y: 0,
-      opacity: 1,
-      transition: {
-        duration: 0.8,
-        ease: "backOut" as const,
-      },
-    },
-  };
-
-  const AnimatedTitle = ({ lines }: { lines: string[] }) => {
-    const maxLineDuration = Math.max(
-      ...lines.map(
-        (line, index) =>
-          index * 0.2 + Math.max(0, line.length - 1) * 0.06 + 0.8,
-      ),
-    );
-    const sweepStyle = {
-      "--sweep-delay": `${maxLineDuration + 0.15}s`,
-    } as CSSProperties;
-    return (
-      <span className="hero-title" style={sweepStyle}>
-        <span className="hero-title-layer hero-title-base">
-          {lines.map((line, lineIndex) => (
-            <span className="hero-title-line" key={`${line}-${lineIndex}`}>
-              <motion.span
-                className="hero-title-line-inner"
-                initial="hidden"
-                animate="visible"
-                transition={{
-                  staggerChildren: 0.06,
-                  delayChildren: lineIndex * 0.2,
-                }}
-              >
-                {line.split("").map((char, index) => (
-                  <motion.span
-                    key={`${lineIndex}-${char}-${index}`}
-                    variants={titleCharVariants}
-                    className="hero-title-char"
-                    style={{ display: "inline-block", whiteSpace: "pre" }}
-                  >
-                    {char}
-                  </motion.span>
-                ))}
-              </motion.span>
-            </span>
-          ))}
-        </span>
-        <span className="hero-title-layer hero-title-sweep" aria-hidden="true">
-          {lines.map((line, lineIndex) => (
-            <span className="hero-title-line" key={`sweep-${line}-${lineIndex}`}>
-              <span className="hero-title-line-inner">{line}</span>
-            </span>
-          ))}
-        </span>
-      </span>
-    );
-  };
-
   if (isLoading) {
     return (
       <div
@@ -805,7 +811,7 @@ export default function Home() {
             The ChargeDB Awards 2025
           </motion.span>
           <h1 style={{ display: "inline-block", margin: 0 }}>
-            <AnimatedTitle lines={["2025 ChargeDB", "年度充电大赏"]} />
+            <AnimatedTitle lines={HERO_TITLE_LINES} />
           </h1>
           <motion.p variants={itemVariants}>
             本次评选采用邀请制，
