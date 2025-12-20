@@ -66,25 +66,24 @@ body,
 @media (max-width: 768px) {
   .home {
     height: 100svh;
-    scroll-snap-type: none;
-    scroll-behavior: auto;
+    /* Restore scroll snap */
+    scroll-snap-type: y mandatory;
+    scroll-behavior: smooth;
   }
 
+  /* Restore section heights and snapping */
   .page-hero,
   .category-page,
   .submit-page {
-    height: auto;
+    height: 100svh;
     min-height: 100svh;
-    scroll-snap-align: none;
-    scroll-snap-stop: normal;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
   }
 
-  .category-page {
-    overflow: visible;
-  }
-
+  /* Critical: Prevent internal scroll from flipping page */
   .entries-container {
-    overflow: visible;
+    overscroll-behavior-y: contain;
   }
 }
 
