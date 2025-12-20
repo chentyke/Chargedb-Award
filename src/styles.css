@@ -33,55 +33,58 @@ html,
 body,
 #root,
 .app {
-  height: 100%;
+  height: 100vh;
   margin: 0;
   padding: 0;
+  overflow: hidden;
 }
 
 .home {
-  min-height: 100%;
-  overflow-y: auto;
+  height: 100vh;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
   display: block;
-  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.home::-webkit-scrollbar {
+  display: none;
 }
 
 /* Sections Common */
 .page-hero,
 .category-page,
 .submit-page {
-  min-height: 100svh;
+  height: 100vh;
   width: 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
   box-sizing: border-box;
 }
 
-@media (min-width: 769px) {
-  html,
-  body,
-  #root,
-  .app {
-    height: 100vh;
-    overflow: hidden;
-  }
-
+@media (max-width: 768px) {
   .home {
-    height: 100vh;
-    overflow-y: scroll;
-    scroll-snap-type: y mandatory;
-    scroll-behavior: smooth;
-    scrollbar-width: none;
-  }
-
-  .home::-webkit-scrollbar {
-    display: none;
+    height: 100svh;
+    scroll-snap-type: none;
+    scroll-behavior: auto;
   }
 
   .page-hero,
   .category-page,
   .submit-page {
-    height: 100vh;
-    min-height: auto;
-    scroll-snap-align: start;
-    scroll-snap-stop: always;
+    height: auto;
+    min-height: 100svh;
+    scroll-snap-align: none;
+    scroll-snap-stop: normal;
+  }
+
+  .category-page {
+    overflow: visible;
+  }
+
+  .entries-container {
+    overflow: visible;
   }
 }
 
@@ -197,22 +200,18 @@ body,
 
 @media (max-width: 768px) {
   .category-page {
-    padding: calc(16px + var(--safe-top)) 16px
-      calc(16px + var(--safe-bottom));
+    padding: calc(16px + var(--safe-top)) 16px calc(16px + var(--safe-bottom));
     gap: 16px;
-    overflow: visible;
   }
 
   .page-hero {
-    padding: calc(24px + var(--safe-top)) 24px
-      calc(24px + var(--safe-bottom));
+    padding: calc(24px + var(--safe-top)) 24px calc(24px + var(--safe-bottom));
     align-items: flex-start;
     text-align: left;
   }
 
   .submit-page {
-    padding: calc(24px + var(--safe-top)) 24px
-      calc(24px + var(--safe-bottom));
+    padding: calc(24px + var(--safe-top)) 24px calc(24px + var(--safe-bottom));
   }
 
   .page-hero h1 {
@@ -267,20 +266,14 @@ body,
 
 .entries-container {
   flex: 1;
-  overflow: visible;
+  overflow-y: auto;
   padding-bottom: 32px;
   /* Space for scrolling */
+  scrollbar-width: none;
 }
 
 .entries-container::-webkit-scrollbar {
   display: none;
-}
-
-@media (min-width: 769px) {
-  .entries-container {
-    overflow-y: auto;
-    scrollbar-width: none;
-  }
 }
 
 .entries-grid {
