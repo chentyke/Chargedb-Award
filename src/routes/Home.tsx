@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+} from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { motion, type Variants } from "framer-motion";
@@ -662,47 +669,62 @@ export default function Home() {
   };
 
   const titleCharVariants: Variants = {
-    hidden: { y: "100%", opacity: 0, color: "var(--primary)" },
-    visible: (index: number) => ({
+    hidden: { y: "100%", opacity: 0 },
+    visible: {
       y: 0,
       opacity: 1,
-      color: ["var(--primary)", "var(--charge-green)"],
       transition: {
-        y: { duration: 0.8, ease: "backOut" as const },
-        opacity: { duration: 0.6 },
-        color: { duration: 0.9, delay: index * 0.04, ease: "easeInOut" },
+        duration: 0.8,
+        ease: "backOut" as const,
       },
-    }),
+    },
   };
 
   const AnimatedTitle = ({ lines }: { lines: string[] }) => {
+    const maxLineDuration = Math.max(
+      ...lines.map(
+        (line, index) =>
+          index * 0.2 + Math.max(0, line.length - 1) * 0.06 + 0.8,
+      ),
+    );
+    const sweepStyle = {
+      "--sweep-delay": `${maxLineDuration + 0.15}s`,
+    } as CSSProperties;
     return (
-      <span className="hero-title">
-        {lines.map((line, lineIndex) => (
-          <span className="hero-title-line" key={`${line}-${lineIndex}`}>
-            <motion.span
-              className="hero-title-line-inner"
-              initial="hidden"
-              animate="visible"
-              transition={{
-                staggerChildren: 0.06,
-                delayChildren: lineIndex * 0.2,
-              }}
-            >
-              {line.split("").map((char, index) => (
-                <motion.span
-                  key={`${lineIndex}-${char}-${index}`}
-                  variants={titleCharVariants}
-                  custom={index}
-                  className="hero-title-char"
-                  style={{ display: "inline-block", whiteSpace: "pre" }}
-                >
-                  {char}
-                </motion.span>
-              ))}
-            </motion.span>
-          </span>
-        ))}
+      <span className="hero-title" style={sweepStyle}>
+        <span className="hero-title-layer hero-title-base">
+          {lines.map((line, lineIndex) => (
+            <span className="hero-title-line" key={`${line}-${lineIndex}`}>
+              <motion.span
+                className="hero-title-line-inner"
+                initial="hidden"
+                animate="visible"
+                transition={{
+                  staggerChildren: 0.06,
+                  delayChildren: lineIndex * 0.2,
+                }}
+              >
+                {line.split("").map((char, index) => (
+                  <motion.span
+                    key={`${lineIndex}-${char}-${index}`}
+                    variants={titleCharVariants}
+                    className="hero-title-char"
+                    style={{ display: "inline-block", whiteSpace: "pre" }}
+                  >
+                    {char}
+                  </motion.span>
+                ))}
+              </motion.span>
+            </span>
+          ))}
+        </span>
+        <span className="hero-title-layer hero-title-sweep" aria-hidden="true">
+          {lines.map((line, lineIndex) => (
+            <span className="hero-title-line" key={`sweep-${line}-${lineIndex}`}>
+              <span className="hero-title-line-inner">{line}</span>
+            </span>
+          ))}
+        </span>
       </span>
     );
   };
