@@ -934,10 +934,10 @@ export default function Home() {
                         <div className="entry-details">
                           <div className="entry-tags">
                             <span className="entry-tag">
-                              {item.model ? `型号：${item.model}` : "型号待补充"}
+                              {item.model || "待补充"}
                             </span>
                             <span className="entry-tag">
-                              {item.specs ? `规格：${item.specs}` : "规格待补充"}
+                              {item.specs || "待补充"}
                             </span>
                           </div>
                           <p className="entry-reason">
