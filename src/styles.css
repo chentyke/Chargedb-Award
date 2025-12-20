@@ -1179,6 +1179,7 @@ body,
 
   .entry-tags {
     align-items: flex-start;
+    flex-direction: column;
   }
 
   .entries-grid {
@@ -1198,13 +1199,10 @@ body,
   .entry-tag {
     font-size: 0.65rem;
     padding: 2px 6px;
-    white-space: normal;
+    max-width: 100%;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-height: 1.2;
   }
 
   .entry-reason {
