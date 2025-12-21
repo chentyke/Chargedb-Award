@@ -835,14 +835,19 @@ export default function Home() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.8, duration: 0.6 }}
         >
-          <button
-            type="button"
-            className="primary-button lg"
-            onClick={startVoting}
-            disabled={items.length === 0}
-          >
-            {votingUnlocked ? "继续投票" : "开启评选"}
-          </button>
+          <div className="hero-buttons">
+            <button
+              type="button"
+              className="primary-button lg"
+              onClick={startVoting}
+              disabled={items.length === 0}
+            >
+              {votingUnlocked ? "继续投票" : "开启评选"}
+            </button>
+            <a className="secondary-button lg" href="https://chargedb.cn">
+              访问官网
+            </a>
+          </div>
           <div className="hero-stats">
             <span>已投 {totalVotes} 票</span>
             <span>{groupedItems.length} 个奖项</span>
@@ -1134,6 +1139,14 @@ export default function Home() {
               })}
             </div>
             {submitError ? <p className="error">{submitError}</p> : null}
+            {isSubmitting ? (
+              <div className="submit-progress" role="status" aria-live="polite">
+                <p>正在提交，请稍候…</p>
+                <div className="progress-bar" aria-hidden="true">
+                  <span />
+                </div>
+              </div>
+            ) : null}
             <div className="modal-actions">
               {submitSuccess ? (
                 <button
@@ -1145,7 +1158,12 @@ export default function Home() {
                 </button>
               ) : (
                 <>
-                  <button type="button" className="ghost-button" onClick={closeReview}>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={closeReview}
+                    disabled={isSubmitting}
+                  >
                     返回修改
                   </button>
                   <button
