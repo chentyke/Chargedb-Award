@@ -10,6 +10,17 @@ const notionApiKey = process.env.NOTION_API_KEY;
 const keyDatabaseId = process.env.KEY_DB || process.env.NOTION_KEY_DATABASE_ID;
 
 const notion = new Client({ auth: notionApiKey });
+const NOTION_CACHE_TTL_MS = 5 * 60 * 1000;
+const VOTE_UPDATE_CONCURRENCY = Math.max(
+  1,
+  Number(process.env.VOTE_UPDATE_CONCURRENCY ?? "2") || 2,
+);
+const MAX_NOTION_RETRIES = 3;
+
+let cachedVotePropertyName = null;
+let cachedVotePropertyNameExpiresAt = 0;
+let cachedKeyDatabaseProperties = null;
+let cachedKeyDatabasePropertiesExpiresAt = 0;
 
 app.use(express.json({ limit: "200kb" }));
 app.use(
@@ -21,6 +32,73 @@ app.use(
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isNotionRetryable(error) {
+  const status = error?.status;
+  return status === 429 || status === 500 || status === 502 || status === 503;
+}
+
+function getRetryDelay(error, attempt) {
+  const retryAfterHeader = error?.headers?.["retry-after"];
+  const retryAfterSeconds = Number(retryAfterHeader);
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+    return retryAfterSeconds * 1000;
+  }
+  const base = Math.min(1000 * 2 ** attempt, 4000);
+  const jitter = Math.floor(Math.random() * 250);
+  return base + jitter;
+}
+
+async function withNotionRetry(task) {
+  let lastError;
+  for (let attempt = 0; attempt <= MAX_NOTION_RETRIES; attempt += 1) {
+    try {
+      return await task();
+    } catch (error) {
+      lastError = error;
+      if (!isNotionRetryable(error) || attempt === MAX_NOTION_RETRIES) {
+        throw error;
+      }
+      await sleep(getRetryDelay(error, attempt));
+    }
+  }
+  throw lastError;
+}
+
+async function asyncPool(limit, list, iterator) {
+  const results = [];
+  const executing = [];
+
+  for (const item of list) {
+    const task = Promise.resolve().then(() => iterator(item));
+    results.push(task);
+
+    if (limit <= list.length) {
+      const executingTask = task.then(() => {
+        executing.splice(executing.indexOf(executingTask), 1);
+      });
+      executing.push(executingTask);
+      if (executing.length >= limit) {
+        await Promise.race(executing);
+      }
+    }
+  }
+
+  return Promise.all(results);
+}
+
+function aggregateVotes(votes) {
+  const totals = new Map();
+  for (const vote of votes) {
+    const current = totals.get(vote.id) ?? 0;
+    totals.set(vote.id, current + vote.count);
+  }
+  return Array.from(totals, ([id, count]) => ({ id, count }));
+}
 
 function joinRichText(richTextArray) {
   return richTextArray.map((item) => item.plain_text).join("").trim();
@@ -366,10 +444,17 @@ async function fetchKeyDatabaseProperties() {
   if (!keyDatabaseId) {
     throw new Error("Missing KEY_DB configuration.");
   }
-  const database = await notion.databases.retrieve({
-    database_id: keyDatabaseId,
-  });
-  return database.properties || {};
+  if (Date.now() < cachedKeyDatabasePropertiesExpiresAt) {
+    return cachedKeyDatabaseProperties;
+  }
+  const database = await withNotionRetry(() =>
+    notion.databases.retrieve({
+      database_id: keyDatabaseId,
+    }),
+  );
+  cachedKeyDatabaseProperties = database.properties || {};
+  cachedKeyDatabasePropertiesExpiresAt = Date.now() + NOTION_CACHE_TTL_MS;
+  return cachedKeyDatabaseProperties;
 }
 
 function resolveKeyProperty(properties) {
@@ -503,9 +588,14 @@ async function resolveVotePropertyName() {
   if (process.env.NOTION_VOTE_PROPERTY) {
     return process.env.NOTION_VOTE_PROPERTY;
   }
-  const database = await notion.databases.retrieve({
-    database_id: databaseId,
-  });
+  if (Date.now() < cachedVotePropertyNameExpiresAt) {
+    return cachedVotePropertyName;
+  }
+  const database = await withNotionRetry(() =>
+    notion.databases.retrieve({
+      database_id: databaseId,
+    }),
+  );
   const properties = Object.entries(database.properties || {}).filter(
     ([, property]) => property.type === "number",
   );
@@ -514,7 +604,9 @@ async function resolveVotePropertyName() {
   }
   const voteMatcher = /vote|票|得票|投票/i;
   const matched = properties.find(([name]) => voteMatcher.test(name));
-  return (matched ?? properties[0])[0];
+  cachedVotePropertyName = (matched ?? properties[0])[0];
+  cachedVotePropertyNameExpiresAt = Date.now() + NOTION_CACHE_TTL_MS;
+  return cachedVotePropertyName;
 }
 
 app.get("/api/notion", async (_req, res) => {
@@ -607,6 +699,7 @@ app.post("/api/votes", async (req, res) => {
       count: Number.isFinite(vote?.count) ? Number(vote.count) : 0,
     }))
     .filter((vote) => vote.id && vote.count > 0);
+  const aggregatedVotes = aggregateVotes(sanitizedVotes);
 
   let keyProperties = null;
   let usedProperty = null;
@@ -615,7 +708,9 @@ app.post("/api/votes", async (req, res) => {
     if (keyDatabaseId && keyId) {
       keyProperties = await fetchKeyDatabaseProperties();
       usedProperty = resolveUsedProperty(keyProperties);
-      const keyPage = await notion.pages.retrieve({ page_id: keyId });
+      const keyPage = await withNotionRetry(() =>
+        notion.pages.retrieve({ page_id: keyId }),
+      );
       if (isUsedPropertyValue(keyPage.properties?.[usedProperty.name])) {
         res.status(403).json({ error: "Key used", message: "该密码已使用。" });
         return;
@@ -625,31 +720,41 @@ app.post("/api/votes", async (req, res) => {
     let votePropertyName = null;
     const results = [];
 
-    if (sanitizedVotes.length > 0) {
+    if (aggregatedVotes.length > 0) {
       votePropertyName = await resolveVotePropertyName();
+      const updateResults = await asyncPool(
+        Math.min(VOTE_UPDATE_CONCURRENCY, aggregatedVotes.length),
+        aggregatedVotes,
+        async (vote) => {
+          const page = await withNotionRetry(() =>
+            notion.pages.retrieve({ page_id: vote.id }),
+          );
+          const property = page.properties?.[votePropertyName];
+          if (!property || property.type !== "number") {
+            throw new Error(
+              `Vote property "${votePropertyName}" is not numeric.`,
+            );
+          }
+          const currentValue = property.number ?? 0;
+          const nextValue = currentValue + vote.count;
 
-      for (const vote of sanitizedVotes) {
-        const page = await notion.pages.retrieve({ page_id: vote.id });
-        const property = page.properties?.[votePropertyName];
-        if (!property || property.type !== "number") {
-          throw new Error(`Vote property "${votePropertyName}" is not numeric.`);
-        }
-        const currentValue = property.number ?? 0;
-        const nextValue = currentValue + vote.count;
+          await withNotionRetry(() =>
+            notion.pages.update({
+              page_id: vote.id,
+              properties: {
+                [votePropertyName]: { number: nextValue },
+              },
+            }),
+          );
 
-        await notion.pages.update({
-          page_id: vote.id,
-          properties: {
-            [votePropertyName]: { number: nextValue },
-          },
-        });
-
-        results.push({
-          id: vote.id,
-          previous: currentValue,
-          next: nextValue,
-        });
-      }
+          return {
+            id: vote.id,
+            previous: currentValue,
+            next: nextValue,
+          };
+        },
+      );
+      results.push(...updateResults);
     }
 
     const resultsPayload = req.body?.results ?? { votes: sanitizedVotes };
