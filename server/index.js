@@ -1,4 +1,7 @@
 import "dotenv/config";
+import crypto from "crypto";
+import fs from "fs/promises";
+import path from "path";
 import cors from "cors";
 import express from "express";
 import { Client } from "@notionhq/client";
@@ -15,12 +18,21 @@ const VOTE_UPDATE_CONCURRENCY = Math.max(
   1,
   Number(process.env.VOTE_UPDATE_CONCURRENCY ?? "2") || 2,
 );
+const VOTE_JOB_CONCURRENCY = Math.max(
+  1,
+  Number(process.env.VOTE_JOB_CONCURRENCY ?? "1") || 1,
+);
+const VOTE_RESULTS_DIR =
+  process.env.VOTE_RESULTS_DIR ||
+  path.resolve(process.cwd(), "server", "vote-results");
 const MAX_NOTION_RETRIES = 3;
 
 let cachedVotePropertyName = null;
 let cachedVotePropertyNameExpiresAt = 0;
 let cachedKeyDatabaseProperties = null;
 let cachedKeyDatabasePropertiesExpiresAt = 0;
+const voteJobQueue = [];
+let activeVoteJobs = 0;
 
 app.use(express.json({ limit: "200kb" }));
 app.use(
@@ -91,6 +103,13 @@ async function asyncPool(limit, list, iterator) {
   return Promise.all(results);
 }
 
+function createJobId() {
+  if (typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return crypto.randomBytes(16).toString("hex");
+}
+
 function aggregateVotes(votes) {
   const totals = new Map();
   for (const vote of votes) {
@@ -98,6 +117,47 @@ function aggregateVotes(votes) {
     totals.set(vote.id, current + vote.count);
   }
   return Array.from(totals, ([id, count]) => ({ id, count }));
+}
+
+async function persistVoteRecord(record) {
+  await fs.mkdir(VOTE_RESULTS_DIR, { recursive: true });
+  const filePath = path.join(VOTE_RESULTS_DIR, `${record.jobId}.json`);
+  await fs.writeFile(filePath, JSON.stringify(record, null, 2), "utf8");
+  return filePath;
+}
+
+async function updateVoteRecord(filePath, record) {
+  await fs.writeFile(filePath, JSON.stringify(record, null, 2), "utf8");
+}
+
+async function safeUpdateVoteRecord(filePath, record) {
+  try {
+    await updateVoteRecord(filePath, record);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Vote record update error:", message);
+  }
+}
+
+function enqueueVoteJob(job) {
+  voteJobQueue.push(job);
+  drainVoteQueue();
+}
+
+function drainVoteQueue() {
+  while (activeVoteJobs < VOTE_JOB_CONCURRENCY && voteJobQueue.length > 0) {
+    const job = voteJobQueue.shift();
+    activeVoteJobs += 1;
+    runVoteJob(job)
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error("Vote job failed:", message);
+      })
+      .finally(() => {
+        activeVoteJobs -= 1;
+        drainVoteQueue();
+      });
+  }
 }
 
 function joinRichText(richTextArray) {
@@ -564,24 +624,28 @@ async function updateKeyResults(keyId, resultsPayload, options = {}) {
   );
   const content = JSON.stringify(resultsPayload ?? {});
   const update = buildResultUpdate(resultProperty.schema, content);
-  await notion.pages.update({
-    page_id: keyId,
-    properties: {
-      [resultProperty.name]: update,
-    },
-  });
+  await withNotionRetry(() =>
+    notion.pages.update({
+      page_id: keyId,
+      properties: {
+        [resultProperty.name]: update,
+      },
+    }),
+  );
 }
 
 async function markKeyUsed(keyId, options = {}) {
   const properties = options.properties ?? (await fetchKeyDatabaseProperties());
   const usedProperty = resolveUsedProperty(properties);
   const usedUpdate = buildUsedUpdate(usedProperty.schema);
-  await notion.pages.update({
-    page_id: keyId,
-    properties: {
-      [usedProperty.name]: usedUpdate,
-    },
-  });
+  await withNotionRetry(() =>
+    notion.pages.update({
+      page_id: keyId,
+      properties: {
+        [usedProperty.name]: usedUpdate,
+      },
+    }),
+  );
 }
 
 async function resolveVotePropertyName() {
@@ -607,6 +671,122 @@ async function resolveVotePropertyName() {
   cachedVotePropertyName = (matched ?? properties[0])[0];
   cachedVotePropertyNameExpiresAt = Date.now() + NOTION_CACHE_TTL_MS;
   return cachedVotePropertyName;
+}
+
+async function performVoteUpdate({ keyId, aggregatedVotes, resultsPayload }) {
+  let keyProperties = null;
+  let usedProperty = null;
+
+  if (keyDatabaseId && keyId) {
+    keyProperties = await fetchKeyDatabaseProperties();
+    usedProperty = resolveUsedProperty(keyProperties);
+    const keyPage = await withNotionRetry(() =>
+      notion.pages.retrieve({ page_id: keyId }),
+    );
+    if (isUsedPropertyValue(keyPage.properties?.[usedProperty.name])) {
+      throw new Error("Key already used.");
+    }
+  }
+
+  let votePropertyName = null;
+  const results = [];
+
+  if (aggregatedVotes.length > 0) {
+    votePropertyName = await resolveVotePropertyName();
+    const updateResults = await asyncPool(
+      Math.min(VOTE_UPDATE_CONCURRENCY, aggregatedVotes.length),
+      aggregatedVotes,
+      async (vote) => {
+        const page = await withNotionRetry(() =>
+          notion.pages.retrieve({ page_id: vote.id }),
+        );
+        const property = page.properties?.[votePropertyName];
+        if (!property || property.type !== "number") {
+          throw new Error(
+            `Vote property "${votePropertyName}" is not numeric.`,
+          );
+        }
+        const currentValue = property.number ?? 0;
+        const nextValue = currentValue + vote.count;
+
+        await withNotionRetry(() =>
+          notion.pages.update({
+            page_id: vote.id,
+            properties: {
+              [votePropertyName]: { number: nextValue },
+            },
+          }),
+        );
+
+        return {
+          id: vote.id,
+          previous: currentValue,
+          next: nextValue,
+        };
+      },
+    );
+    results.push(...updateResults);
+  }
+
+  let resultsSaved = false;
+  let resultsError = null;
+
+  if (keyDatabaseId && keyId) {
+    try {
+      await updateKeyResults(keyId, resultsPayload, {
+        properties: keyProperties ?? undefined,
+      });
+      resultsSaved = true;
+    } catch (error) {
+      resultsError =
+        error instanceof Error ? error.message : "Unknown Notion error.";
+      console.error("Key result update error:", resultsError);
+    }
+
+    try {
+      await markKeyUsed(keyId, { properties: keyProperties ?? undefined });
+    } catch (error) {
+      const usedError =
+        error instanceof Error ? error.message : "Unknown Notion error.";
+      console.error("Key used update error:", usedError);
+      resultsError = resultsError ? `${resultsError}; ${usedError}` : usedError;
+    }
+  }
+
+  return {
+    updated: results.length,
+    property: votePropertyName ?? undefined,
+    results,
+    resultsSaved,
+    resultsError,
+  };
+}
+
+async function runVoteJob(job) {
+  const startedAt = new Date().toISOString();
+  job.record = { ...job.record, status: "processing", startedAt };
+  await safeUpdateVoteRecord(job.recordPath, job.record);
+
+  try {
+    const result = await performVoteUpdate(job);
+    job.record = {
+      ...job.record,
+      status: "completed",
+      completedAt: new Date().toISOString(),
+      updateResult: result,
+    };
+    await safeUpdateVoteRecord(job.recordPath, job.record);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    job.record = {
+      ...job.record,
+      status: "failed",
+      failedAt: new Date().toISOString(),
+      error: message,
+    };
+    await safeUpdateVoteRecord(job.recordPath, job.record);
+    console.error(`Vote update failed for job ${job.jobId}:`, message);
+  }
 }
 
 app.get("/api/notion", async (_req, res) => {
@@ -700,104 +880,39 @@ app.post("/api/votes", async (req, res) => {
     }))
     .filter((vote) => vote.id && vote.count > 0);
   const aggregatedVotes = aggregateVotes(sanitizedVotes);
-
-  let keyProperties = null;
-  let usedProperty = null;
+  const resultsPayload = req.body?.results ?? { votes: sanitizedVotes };
+  const jobId = createJobId();
+  const record = {
+    jobId,
+    receivedAt: new Date().toISOString(),
+    status: "queued",
+    keyId: keyId || null,
+    votes: sanitizedVotes,
+    results: resultsPayload,
+  };
 
   try {
-    if (keyDatabaseId && keyId) {
-      keyProperties = await fetchKeyDatabaseProperties();
-      usedProperty = resolveUsedProperty(keyProperties);
-      const keyPage = await withNotionRetry(() =>
-        notion.pages.retrieve({ page_id: keyId }),
-      );
-      if (isUsedPropertyValue(keyPage.properties?.[usedProperty.name])) {
-        res.status(403).json({ error: "Key used", message: "该密码已使用。" });
-        return;
-      }
-    }
-
-    let votePropertyName = null;
-    const results = [];
-
-    if (aggregatedVotes.length > 0) {
-      votePropertyName = await resolveVotePropertyName();
-      const updateResults = await asyncPool(
-        Math.min(VOTE_UPDATE_CONCURRENCY, aggregatedVotes.length),
-        aggregatedVotes,
-        async (vote) => {
-          const page = await withNotionRetry(() =>
-            notion.pages.retrieve({ page_id: vote.id }),
-          );
-          const property = page.properties?.[votePropertyName];
-          if (!property || property.type !== "number") {
-            throw new Error(
-              `Vote property "${votePropertyName}" is not numeric.`,
-            );
-          }
-          const currentValue = property.number ?? 0;
-          const nextValue = currentValue + vote.count;
-
-          await withNotionRetry(() =>
-            notion.pages.update({
-              page_id: vote.id,
-              properties: {
-                [votePropertyName]: { number: nextValue },
-              },
-            }),
-          );
-
-          return {
-            id: vote.id,
-            previous: currentValue,
-            next: nextValue,
-          };
-        },
-      );
-      results.push(...updateResults);
-    }
-
-    const resultsPayload = req.body?.results ?? { votes: sanitizedVotes };
-    let resultsSaved = false;
-    let resultsError = null;
-
-    if (keyDatabaseId && keyId) {
-      try {
-        await updateKeyResults(keyId, resultsPayload, {
-          properties: keyProperties ?? undefined,
-        });
-        resultsSaved = true;
-      } catch (error) {
-        resultsError =
-          error instanceof Error ? error.message : "Unknown Notion error.";
-        console.error("Key result update error:", resultsError);
-      }
-
-      try {
-        await markKeyUsed(keyId, { properties: keyProperties ?? undefined });
-      } catch (error) {
-        const usedError =
-          error instanceof Error ? error.message : "Unknown Notion error.";
-        console.error("Key used update error:", usedError);
-        resultsError = resultsError
-          ? `${resultsError}; ${usedError}`
-          : usedError;
-      }
-    }
+    const recordPath = await persistVoteRecord(record);
+    enqueueVoteJob({
+      jobId,
+      keyId,
+      aggregatedVotes,
+      sanitizedVotes,
+      resultsPayload,
+      record,
+      recordPath,
+    });
 
     res.json({
       ok: true,
-      updated: results.length,
-      property: votePropertyName ?? undefined,
-      results,
-      resultsSaved,
-      resultsError,
+      queued: true,
+      jobId,
     });
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Unknown Notion error.";
-    console.error("Notion update error:", message);
-    res.status(500).json({ error: "Vote update failed", message });
+      error instanceof Error ? error.message : "Unknown storage error.";
+    console.error("Vote record save error:", message);
+    res.status(500).json({ error: "Vote record save failed", message });
   }
 });
 
