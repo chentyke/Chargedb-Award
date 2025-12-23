@@ -65,6 +65,7 @@ body,
 }
 
 @media (max-width: 768px) {
+
   html,
   body,
   #root,
@@ -492,9 +493,19 @@ body,
 }
 
 @media (min-width: 1024px) {
+  .category-page {
+    /* Reserve more space on sides to make cards smaller */
+    padding: 24px 18vw;
+  }
+
   .entries-grid {
     gap: 32px;
     grid-template-columns: repeat(3, 1fr);
+  }
+
+  .media {
+    /* Shorten height further to make whole card roughly square: 16:9 aspect ratio */
+    aspect-ratio: 16 / 9;
   }
 }
 
@@ -569,6 +580,8 @@ body,
   background: var(--bg-soft);
 }
 
+
+
 .entry-body {
   padding: 14px;
   display: flex;
@@ -579,8 +592,9 @@ body,
 
 @media (min-width: 768px) {
   .entry-body {
-    padding: 20px;
-    gap: 16px;
+    /* Reduce padding to compact the card */
+    padding: 16px;
+    gap: 12px;
   }
 }
 
